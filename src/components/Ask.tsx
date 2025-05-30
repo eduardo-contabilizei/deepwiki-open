@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import RepoInfo from '@/types/repoinfo';
 import getRepoUrl from '@/utils/getRepoUrl';
 import ModelSelectionModal from './ModelSelectionModal';
+import { WikiType } from './WikiTypeSelector';
 import { createChatWebSocket, closeWebSocket, ChatCompletionRequest } from '@/utils/websocketClient';
 
 interface Model {
@@ -40,6 +41,7 @@ interface AskProps {
   isCustomModel?: boolean;
   customModel?: string;
   language?: string;
+  wikiType?: WikiType;
   onRef?: (ref: { clearConversation: () => void }) => void;
 }
 
@@ -49,6 +51,7 @@ const Ask: React.FC<AskProps> = ({
   model = '',
   isCustomModel = false,
   customModel = '',
+  wikiType = 'comprehensive',
   language = 'en',
   onRef
 }) => {
@@ -63,7 +66,7 @@ const Ask: React.FC<AskProps> = ({
   const [isCustomSelectedModel, setIsCustomSelectedModel] = useState(isCustomModel);
   const [customSelectedModel, setCustomSelectedModel] = useState(customModel);
   const [isModelSelectionModalOpen, setIsModelSelectionModalOpen] = useState(false);
-  const [isComprehensiveView, setIsComprehensiveView] = useState(true);
+  const [localWikiType, setLocalWikiType] = useState<WikiType>(wikiType);
 
   // Get language context for translations
   const { messages } = useLanguage();
@@ -862,8 +865,8 @@ const Ask: React.FC<AskProps> = ({
         setIsCustomModel={setIsCustomSelectedModel}
         customModel={customSelectedModel}
         setCustomModel={setCustomSelectedModel}
-        isComprehensiveView={isComprehensiveView}
-        setIsComprehensiveView={setIsComprehensiveView}
+        wikiType={localWikiType}
+        setWikiType={setLocalWikiType}
         showFileFilters={false}
         onApply={() => {
           console.log('Model selection applied:', selectedProvider, selectedModel);

@@ -86,6 +86,7 @@ class WikiCacheRequest(BaseModel):
     repo: str
     repo_type: str
     language: str
+    wiki_type: str = "comprehensive"
     wiki_structure: WikiStructureModel
     generated_pages: Dict[str, WikiPage]
 
@@ -364,14 +365,14 @@ app.add_websocket_route("/ws/chat", handle_websocket_chat)
 WIKI_CACHE_DIR = os.path.join(get_adalflow_default_root_path(), "wikicache")
 os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
 
-def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str) -> str:
+def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str, wiki_type: str = "comprehensive") -> str:
     """Generates the file path for a given wiki cache."""
-    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}.json"
+    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}_{wiki_type}.json"
     return os.path.join(WIKI_CACHE_DIR, filename)
 
-async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str) -> Optional[WikiCacheData]:
+async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str, wiki_type: str = "comprehensive") -> Optional[WikiCacheData]:
     """Reads wiki cache data from the file system."""
-    cache_path = get_wiki_cache_path(owner, repo, repo_type, language)
+    cache_path = get_wiki_cache_path(owner, repo, repo_type, language, wiki_type)
     if os.path.exists(cache_path):
         try:
             with open(cache_path, 'r', encoding='utf-8') as f:
@@ -384,7 +385,7 @@ async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str) 
 
 async def save_wiki_cache(data: WikiCacheRequest) -> bool:
     """Saves wiki cache data to the file system."""
-    cache_path = get_wiki_cache_path(data.owner, data.repo, data.repo_type, data.language)
+    cache_path = get_wiki_cache_path(data.owner, data.repo, data.repo_type, data.language, data.wiki_type)
     logger.info(f"Attempting to save wiki cache. Path: {cache_path}")
     try:
         payload = WikiCacheData(
@@ -419,19 +420,20 @@ async def get_cached_wiki(
     owner: str = Query(..., description="Repository owner"),
     repo: str = Query(..., description="Repository name"),
     repo_type: str = Query(..., description="Repository type (e.g., github, gitlab)"),
-    language: str = Query(..., description="Language of the wiki content")
+    language: str = Query(..., description="Language of the wiki content"),
+    wikiType: str = Query("comprehensive", description="Type of wiki (comprehensive, concise, business)")
 ):
     """
     Retrieves cached wiki data (structure and generated pages) for a repository.
     """
-    logger.info(f"Attempting to retrieve wiki cache for {owner}/{repo} ({repo_type}), lang: {language}")
-    cached_data = await read_wiki_cache(owner, repo, repo_type, language)
+    logger.info(f"Attempting to retrieve wiki cache for {owner}/{repo} ({repo_type}), lang: {language}, type: {wikiType}")
+    cached_data = await read_wiki_cache(owner, repo, repo_type, language, wikiType)
     if cached_data:
         return cached_data
     else:
         # Return 200 with null body if not found, as frontend expects this behavior
         # Or, raise HTTPException(status_code=404, detail="Wiki cache not found") if preferred
-        logger.info(f"Wiki cache not found for {owner}/{repo} ({repo_type}), lang: {language}")
+        logger.info(f"Wiki cache not found for {owner}/{repo} ({repo_type}), lang: {language}, type: {wikiType}")
         return None
 
 @app.post("/api/wiki_cache")
@@ -451,13 +453,14 @@ async def delete_wiki_cache(
     owner: str = Query(..., description="Repository owner"),
     repo: str = Query(..., description="Repository name"),
     repo_type: str = Query(..., description="Repository type (e.g., github, gitlab)"),
-    language: str = Query(..., description="Language of the wiki content")
+    language: str = Query(..., description="Language of the wiki content"),
+    wikiType: str = Query("comprehensive", description="Type of wiki (comprehensive, concise, business)")
 ):
     """
     Deletes a specific wiki cache from the file system.
     """
-    logger.info(f"Attempting to delete wiki cache for {owner}/{repo} ({repo_type}), lang: {language}")
-    cache_path = get_wiki_cache_path(owner, repo, repo_type, language)
+    logger.info(f"Attempting to delete wiki cache for {owner}/{repo} ({repo_type}), lang: {language}, type: {wikiType}")
+    cache_path = get_wiki_cache_path(owner, repo, repo_type, language, wikiType)
 
     if os.path.exists(cache_path):
         try:

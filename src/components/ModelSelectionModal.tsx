@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import UserSelector from './UserSelector';
-import WikiTypeSelector from './WikiTypeSelector';
+import WikiTypeSelector, { WikiType } from './WikiTypeSelector';
 
 interface ModelSelectionModalProps {
   isOpen: boolean;
@@ -19,8 +19,8 @@ interface ModelSelectionModalProps {
   onApply: () => void;
 
   // Wiki type options
-  isComprehensiveView: boolean;
-  setIsComprehensiveView: (value: boolean) => void;
+  wikiType: WikiType;
+  setWikiType: (value: WikiType) => void;
 
   // File filter options - optional
   excludedDirs?: string;
@@ -47,8 +47,8 @@ export default function ModelSelectionModal({
   customModel,
   setCustomModel,
   onApply,
-  isComprehensiveView,
-  setIsComprehensiveView,
+  wikiType,
+  setWikiType,
   excludedDirs = '',
   setExcludedDirs,
   excludedFiles = '',
@@ -67,7 +67,7 @@ export default function ModelSelectionModal({
   const [localModel, setLocalModel] = useState(model);
   const [localIsCustomModel, setLocalIsCustomModel] = useState(isCustomModel);
   const [localCustomModel, setLocalCustomModel] = useState(customModel);
-  const [localIsComprehensiveView, setLocalIsComprehensiveView] = useState(isComprehensiveView);
+  const [localWikiType, setLocalWikiType] = useState<WikiType>(wikiType);
   const [localExcludedDirs, setLocalExcludedDirs] = useState(excludedDirs);
   const [localExcludedFiles, setLocalExcludedFiles] = useState(excludedFiles);
   const [localIncludedDirs, setLocalIncludedDirs] = useState(includedDirs);
@@ -80,13 +80,13 @@ export default function ModelSelectionModal({
       setLocalModel(model);
       setLocalIsCustomModel(isCustomModel);
       setLocalCustomModel(customModel);
-      setLocalIsComprehensiveView(isComprehensiveView);
+      setLocalWikiType(wikiType);
       setLocalExcludedDirs(excludedDirs);
       setLocalExcludedFiles(excludedFiles);
       setLocalIncludedDirs(includedDirs);
       setLocalIncludedFiles(includedFiles);
     }
-  }, [isOpen, provider, model, isCustomModel, customModel, isComprehensiveView, excludedDirs, excludedFiles, includedDirs, includedFiles]);
+  }, [isOpen, provider, model, isCustomModel, customModel, wikiType, excludedDirs, excludedFiles, includedDirs, includedFiles]);
 
   // Handler for applying changes
   const handleApply = () => {
@@ -94,7 +94,7 @@ export default function ModelSelectionModal({
     setModel(localModel);
     setIsCustomModel(localIsCustomModel);
     setCustomModel(localCustomModel);
-    setIsComprehensiveView(localIsComprehensiveView);
+    setWikiType(localWikiType);
     if (setExcludedDirs) setExcludedDirs(localExcludedDirs);
     if (setExcludedFiles) setExcludedFiles(localExcludedFiles);
     if (setIncludedDirs) setIncludedDirs(localIncludedDirs);
@@ -128,12 +128,12 @@ export default function ModelSelectionModal({
           {/* Modal body */}
           <div className="p-6">
             {/* Wiki Type Selector */}
-            {
-              showWikiType && <WikiTypeSelector
-                    isComprehensiveView={localIsComprehensiveView}
-                    setIsComprehensiveView={setLocalIsComprehensiveView}
-                />
-            }
+            {showWikiType && (
+              <WikiTypeSelector
+                wikiType={localWikiType}
+                setWikiType={setLocalWikiType}
+              />
+            )}
 
             {/* Divider */}
             <div className="my-4 border-t border-[var(--border-color)]/30"></div>

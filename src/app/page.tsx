@@ -12,6 +12,7 @@ import { extractUrlPath } from '@/utils/urlDecoder';
 import { useProcessedProjects } from '@/hooks/useProcessedProjects';
 
 import { useLanguage } from '@/contexts/LanguageContext';
+import { WikiType } from '@/components/WikiTypeSelector';
 
 // Define the demo mermaid charts outside the component
 const DEMO_FLOW_CHART = `graph TD
@@ -84,7 +85,7 @@ export default function Home() {
   const [customModel, setCustomModel] = useState<string>('');
 
   // Wiki type state - default to comprehensive view
-  const [isComprehensiveView, setIsComprehensiveView] = useState<boolean>(true);
+  const [wikiType, setWikiType] = useState<WikiType>('comprehensive');
 
   const [excludedDirs, setExcludedDirs] = useState('');
   const [excludedFiles, setExcludedFiles] = useState('');
@@ -238,7 +239,7 @@ export default function Home() {
     params.append('language', selectedLanguage);
 
     // Add comprehensive parameter
-    params.append('comprehensive', isComprehensiveView.toString());
+    params.append('wikiType', wikiType);
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
 
@@ -305,8 +306,8 @@ export default function Home() {
             repositoryInput={repositoryInput}
             selectedLanguage={selectedLanguage}
             setSelectedLanguage={setSelectedLanguage}
-            isComprehensiveView={isComprehensiveView}
-            setIsComprehensiveView={setIsComprehensiveView}
+            wikiType={wikiType}
+            setWikiType={setWikiType}
             provider={provider}
             setProvider={setProvider}
             model={model}

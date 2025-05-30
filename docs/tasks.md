@@ -76,3 +76,26 @@
 
 **Iteração no Prompt**
 35. [ ] Com base nos resultados dos testes qualitativos, refinar o prompt de negócios conforme necessário para melhorar a qualidade da documentação gerada.
+
+## Correções e Melhorias da Cache
+
+36. [X] Investigar e modificar o endpoint `/api/wiki_cache` para garantir que ele respeite estritamente o parâmetro `wikiType`. Ele só deve retornar uma wiki em cache se o `wikiType` no cache corresponder ao `wikiType` na solicitação.
+37. [X] (Opcional) Considerar adicionar um campo `wikiType` à interface `WikiStructure` (e aos tipos de backend correspondentes) para permitir a validação do lado do cliente dos dados da wiki em cache.
+
+## Correções de URL do GitLab
+
+38. [ ] Corrigir a extração do caminho do projeto para URLs do GitLab que incluem subgrupos (ex: `https://gitlab.com/group/subgroup/project`).
+39. [ ] Garantir que o caminho completo do projeto GitLab seja codificado corretamente para uso em chamadas de API.
+40. [ ] Remover a adição do sufixo de idioma (ex: `_pt-BR`) ao caminho do projeto nas URLs da API do GitLab.
+41. [ ] Atualizar a construção da URL da API do GitLab em `src/app/[owner]/[repo]/page.tsx` para usar a estrutura de caminho correta e evitar o erro 404.
+
+## Correções na Geração da Wiki por Tipo
+
+42. [ ] Investigar por que a seleção do tipo de wiki "business" resulta na geração de uma wiki do tipo "comprehensive".
+43. [~] Verificar se o parâmetro `wikiType` está sendo corretamente passado do frontend para o backend. (Frontend: `page.tsx` atualizado para enviar `wiki_type` nos payloads de `/api/wiki-structure` e na API de geração de conteúdo de página).
+44. [ ] Backend: Modificar o endpoint `/api/wiki-structure` para utilizar o parâmetro `wiki_type` (enviado no corpo da requisição) para:
+    - Selecionar o prompt apropriado para a IA (business, concise, comprehensive) ao determinar a estrutura da wiki.
+    - Influenciar a profundidade e o tipo de seções/páginas sugeridas na estrutura da wiki.
+45. [ ] Backend: Modificar o endpoint da API responsável pela geração de conteúdo de página (ex: `/api/generate-page-content` ou similar) para utilizar o parâmetro `wiki_type` (enviado no corpo da requisição) para:
+    - Selecionar o prompt apropriado para a IA (business, concise, comprehensive) ao gerar o conteúdo Markdown de cada página.
+46. [ ] Garantir que, ao gerar uma nova wiki, o tipo especificado pelo usuário seja o tipo da wiki resultante, independentemente de caches existentes para outros tipos.

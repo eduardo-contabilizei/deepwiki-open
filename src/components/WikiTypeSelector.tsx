@@ -2,16 +2,18 @@
 
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { FaBookOpen, FaList } from 'react-icons/fa';
+import { FaBookOpen, FaList, FaBriefcase } from 'react-icons/fa';
+
+export type WikiType = 'comprehensive' | 'concise' | 'business';
 
 interface WikiTypeSelectorProps {
-  isComprehensiveView: boolean;
-  setIsComprehensiveView: (value: boolean) => void;
+  wikiType: WikiType;
+  setWikiType: (value: WikiType) => void;
 }
 
 const WikiTypeSelector: React.FC<WikiTypeSelectorProps> = ({
-  isComprehensiveView,
-  setIsComprehensiveView,
+  wikiType,
+  setWikiType,
 }) => {
   const { messages: t } = useLanguage();
 
@@ -23,9 +25,9 @@ const WikiTypeSelector: React.FC<WikiTypeSelectorProps> = ({
       <div className="flex flex-col sm:flex-row gap-3">
         <button
           type="button"
-          onClick={() => setIsComprehensiveView(true)}
+          onClick={() => setWikiType('comprehensive')}
           className={`flex items-center justify-between p-3 rounded-md border transition-colors ${
-            isComprehensiveView
+            wikiType === 'comprehensive'
               ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
               : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
           }`}
@@ -39,7 +41,7 @@ const WikiTypeSelector: React.FC<WikiTypeSelectorProps> = ({
               </div>
             </div>
           </div>
-          {isComprehensiveView && (
+          {wikiType === 'comprehensive' && (
             <div className="ml-2 h-4 w-4 rounded-full bg-[var(--accent-primary)]/20 flex items-center justify-center">
               <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)]"></div>
             </div>
@@ -48,9 +50,9 @@ const WikiTypeSelector: React.FC<WikiTypeSelectorProps> = ({
         
         <button
           type="button"
-          onClick={() => setIsComprehensiveView(false)}
+          onClick={() => setWikiType('concise')}
           className={`flex items-center justify-between p-3 rounded-md border transition-colors ${
-            !isComprehensiveView
+            wikiType === 'concise'
               ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
               : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
           }`}
@@ -64,7 +66,32 @@ const WikiTypeSelector: React.FC<WikiTypeSelectorProps> = ({
               </div>
             </div>
           </div>
-          {!isComprehensiveView && (
+          {wikiType === 'concise' && (
+            <div className="ml-2 h-4 w-4 rounded-full bg-[var(--accent-primary)]/20 flex items-center justify-center">
+              <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)]"></div>
+            </div>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setWikiType('business')}
+          className={`flex items-center justify-between p-3 rounded-md border transition-colors ${
+            wikiType === 'business'
+              ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
+              : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
+          }`}
+        >
+          <div className="flex items-center">
+            <FaBriefcase className="mr-2" />
+            <div className="text-left">
+              <div className="font-medium">{t.form?.business || 'Business'}</div>
+              <div className="text-xs opacity-80">
+                {t.form?.businessDescription || 'Business-focused wiki with non-technical language for stakeholders'}
+              </div>
+            </div>
+          </div>
+          {wikiType === 'business' && (
             <div className="ml-2 h-4 w-4 rounded-full bg-[var(--accent-primary)]/20 flex items-center justify-center">
               <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)]"></div>
             </div>

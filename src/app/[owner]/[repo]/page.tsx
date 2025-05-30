@@ -10,6 +10,7 @@ import Markdown from '@/components/Markdown';
 import Ask from '@/components/Ask';
 import ModelSelectionModal from '@/components/ModelSelectionModal';
 import WikiTreeView from '@/components/WikiTreeView';
+import { WikiType } from '@/components/WikiTypeSelector';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { RepoInfo } from '@/types/repoinfo';
 import { extractUrlDomain, extractUrlPath } from '@/utils/urlDecoder';
@@ -42,6 +43,7 @@ interface WikiStructure {
   pages: WikiPage[];
   sections: WikiSection[];
   rootSections: string[];
+  wikiType?: WikiType;
 }
 
 // Add CSS styles for wiki with Japanese aesthetic
@@ -88,8 +90,8 @@ const wikiStyles = `
 `;
 
 // Helper function to generate cache key for localStorage
-const getCacheKey = (owner: string, repo: string, repoType: string, language: string, isComprehensive: boolean = true): string => {
-  return `deepwiki_cache_${repoType}_${owner}_${repo}_${language}_${isComprehensive ? 'comprehensive' : 'concise'}`;
+const getCacheKey = (owner: string, repo: string, repoType: string, language: string, wikiType: WikiType): string => {
+  return `deepwiki_cache_${repoType}_${owner}_${repo}_${language}_${wikiType}`;
 };
 
 // Helper function to add tokens and other parameters to request body
@@ -225,8 +227,20 @@ export default function RepoWikiPage() {
   const [modelExcludedFiles, setModelExcludedFiles] = useState(excludedFiles);
 
   // Wiki type state - default to comprehensive view
-  const isComprehensiveParam = searchParams.get('comprehensive') !== 'false';
-  const [isComprehensiveView, setIsComprehensiveView] = useState(isComprehensiveParam);
+  const wikiTypeParam = searchParams.get('wikiType') || 'comprehensive';
+  // Validar e normalizar o valor de wikiType
+  const normalizeWikiType = (type: string): WikiType => {
+    const normalized = String(type).trim().toLowerCase();
+    return (normalized === 'comprehensive' || normalized === 'business' || normalized === 'concise') 
+      ? normalized as WikiType 
+      : 'comprehensive';
+  };
+  const [wikiType, setWikiTypeRaw] = useState<WikiType>(normalizeWikiType(wikiTypeParam));
+  
+  // Wrapper para setWikiType que normaliza o valor
+  const setWikiType = useCallback((type: WikiType) => {
+    setWikiTypeRaw(normalizeWikiType(type));
+  }, []);
   // Using useRef for activeContentRequests to maintain a single instance across renders
   // This map tracks which pages are currently being processed to prevent duplicate requests
   // Note: In a multi-threaded environment, additional synchronization would be needed,
@@ -301,7 +315,77 @@ export default function RepoWikiPage() {
         const repoUrl = getRepoUrl(repoInfo);
 
         // Create the prompt content - simplified to avoid message dialogs
- const promptContent =
+ let promptContent = '';
+        // Garantir que wikiType seja uma string válida
+        const wikiTypeValue = String(wikiType).trim().toLowerCase();
+        
+        if (wikiTypeValue === 'business') {
+          promptContent = 
+`You are an expert technical writer and business analyst.
+Your task is to generate a business-focused wiki page in Markdown format about "${page.title}".
+
+You will be given:
+1. The "[WIKI_PAGE_TOPIC]" for the page.
+2. A list of "[RELEVANT_SOURCE_FILES]" from the project. Use these to understand the functionality.
+
+CRITICAL STARTING INSTRUCTION:
+The page MUST start with a \`<details>\` block listing the key source files used (2-3 most relevant).
+Format:
+<details>
+<summary>Key source files</summary>
+The following files were key for understanding this topic:
+${filePaths.slice(0, 3).map(path => `- [${path}](${path})`).join('\n')}
+</details>
+
+Immediately after, the main title: \`# ${page.title}\`.
+
+Based ONLY on the provided files, focus on:
+
+1.  **Purpose and Business Value:** (1-2 paragraphs) What is "${page.title}" and why is it important for the business or stakeholders? What problems does it solve or value does it create?
+2.  **Key Features & Benefits:** (Bulleted list or H2 sections) What are the main functionalities of "${page.title}" from a user or business perspective? What are the benefits of these features?
+3.  **High-Level Architecture/Workflow:** (H2 section) Briefly describe how "${page.title}" works at a high level. Use a simple Mermaid diagram (e.g., \`flowchart TD\` or \`sequenceDiagram\`) if it clarifies a key business process or system interaction. Diagrams must be top-down.
+4.  **Integration Points:** (H2 section, if applicable) How does "${page.title}" interact with other systems, modules, or external services? What data is exchanged?
+5.  **Key Data/Metrics:** (H2 section, if applicable) What important data does "${page.title}" handle or generate? Are there key metrics associated with its operation that are relevant to the business?
+
+General Guidelines:
+- Language: ${language === 'en' ? 'English' : language === 'ja' ? 'Japanese (日本語)' : language === 'zh' ? 'Mandarin Chinese (中文)' : language === 'es' ? 'Spanish (Español)' : language === 'kr' ? 'Korean (한국어)' : language === 'vi' ? 'Vietnamese (Tiếng Việt)' : language === 'pt-BR' ? 'Portuguese (Português)' : 'English'}.
+- Focus on clarity for a business or product-oriented audience. Avoid deep technical jargon unless essential and explained.
+- Cite 1-2 key source files if specific details are pulled directly: \`Source: [filename.ext]()\`.
+- Keep explanations concise and to the point.
+`;
+        } else if (wikiTypeValue === 'concise') {
+          promptContent = 
+`You are a technical writer creating a concise summary.
+Your task is to generate a brief wiki page in Markdown format about "${page.title}".
+
+You will be given:
+1. The "[WIKI_PAGE_TOPIC]" for the page.
+2. A list of "[RELEVANT_SOURCE_FILES]". Use these for accuracy.
+
+CRITICAL STARTING INSTRUCTION:
+The page MUST start with a \`<details>\` block listing 1-2 most relevant source files.
+Format:
+<details>
+<summary>Primary source file(s)</summary>
+${filePaths.slice(0, 2).map(path => `- [${path}](${path})`).join('\n')}
+</details>
+
+Immediately after, the main title: \`# ${page.title}\`.
+
+Based ONLY on the provided files, cover:
+
+1.  **Overview:** (1 paragraph) What is "${page.title}" in simple terms?
+2.  **Core Functionality:** (Bulleted list or 1-2 paragraphs) What are the 2-3 main things it does?
+3.  **Basic Usage/Setup:** (If applicable, 1 paragraph or short steps) How does one use or set up "${page.title}"?
+
+General Guidelines:
+- Language: ${language === 'en' ? 'English' : language === 'ja' ? 'Japanese (日本語)' : language === 'zh' ? 'Mandarin Chinese (中文)' : language === 'es' ? 'Spanish (Español)' : language === 'kr' ? 'Korean (한국어)' : language === 'vi' ? 'Vietnamese (Tiếng Việt)' : language === 'pt-BR' ? 'Portuguese (Português)' : 'English'}.
+- Be very brief and direct. Avoid technical depth.
+- Cite the primary source file if a specific detail is mentioned: \`Source: [filename.ext]()\`.
+- No diagrams or complex tables.
+`;
+        } else { // Default to comprehensive (quando wikiTypeValue não é 'business' nem 'concise')
+          promptContent = 
 `You are an expert technical writer and software architect.
 Your task is to generate a comprehensive and accurate technical wiki page in Markdown format about a specific feature, system, or module within a given software project.
 
@@ -388,12 +472,14 @@ Remember:
 - Prioritize accuracy and direct representation of the code's functionality and structure.
 - Structure the document logically for easy understanding by other developers.
 `;
+        }
 
         // Prepare request body
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const requestBody: Record<string, any> = {
           repo_url: repoUrl,
           type: repoInfo.type,
+          wiki_type: wikiType, // Added wikiType here
           messages: [{
             role: 'user',
             content: promptContent
@@ -542,7 +628,7 @@ Remember:
         setLoadingMessage(undefined); // Clear specific loading message
       }
     });
-  }, [generatedPages, token, repoInfo, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, language, activeContentRequests]);
+  }, [generatedPages, token, repoInfo, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, language, activeContentRequests, wikiType]);
 
   // Determine the wiki structure from repository data
   const determineWikiStructure = useCallback(async (fileTree: string, readme: string, owner: string, repo: string) => {
@@ -570,6 +656,7 @@ Remember:
       const requestBody: Record<string, any> = {
         repo_url: repoUrl,
         type: repoInfo.type,
+        wiki_type: wikiType, // Added wikiType here
         messages: [{
           role: 'user',
 content: `Analyze this GitHub repository ${owner}/${repo} and create a wiki structure for it.
@@ -602,7 +689,12 @@ When designing the wiki structure, include pages that would benefit from visual 
 - State machines
 - Class hierarchies
 
-${isComprehensiveView ? `
+${(() => {
+  // Garantir que wikiType seja uma string válida
+  const wikiTypeValue = String(wikiType).trim().toLowerCase();
+  
+  if (wikiTypeValue === 'comprehensive') {
+    return `
 Create a structured wiki with the following main sections:
 - Overview (general information about the project)
 - System Architecture (how the system is designed)
@@ -652,7 +744,57 @@ Return your analysis in the following XML format:
     <!-- More pages as needed -->
   </pages>
 </wiki_structure>
-` : `
+`;
+  } else if (wikiTypeValue === 'business') {
+    return `
+Create a business-focused wiki that explains the repository from a non-technical perspective. Focus on:
+- Business purpose and value of the application
+- Key business processes and workflows
+- Business rules and constraints
+- User roles and responsibilities
+- Business entities and their relationships
+
+The wiki should be structured to be easily understood by stakeholders without technical background.
+
+Return your analysis in the following XML format:
+
+<wiki_structure>
+  <title>[Overall title for the wiki]</title>
+  <description>[Brief business description of the repository]</description>
+  <sections>
+    <section id="section-1">
+      <title>[Business-focused section title]</title>
+      <pages>
+        <page_ref>page-1</page_ref>
+        <page_ref>page-2</page_ref>
+      </pages>
+      <subsections>
+        <section_ref>section-2</section_ref>
+      </subsections>
+    </section>
+    <!-- More sections as needed -->
+  </sections>
+  <pages>
+    <page id="page-1">
+      <title>[Business-focused page title]</title>
+      <description>[Brief description of the business aspect this page will cover]</description>
+      <importance>high|medium|low</importance>
+      <relevant_files>
+        <file_path>[Path to a relevant file]</file_path>
+        <!-- More file paths as needed -->
+      </relevant_files>
+      <related_pages>
+        <related>page-2</related>
+        <!-- More related page IDs as needed -->
+      </related_pages>
+      <parent_section>section-1</parent_section>
+    </page>
+    <!-- More pages as needed -->
+  </pages>
+</wiki_structure>
+`;
+  } else { // concise
+    return `
 Return your analysis in the following XML format:
 
 <wiki_structure>
@@ -675,7 +817,9 @@ Return your analysis in the following XML format:
     <!-- More pages as needed -->
   </pages>
 </wiki_structure>
-`}
+`;
+  }
+})()}
 
 IMPORTANT FORMATTING INSTRUCTIONS:
 - Return ONLY the valid XML structure specified above
@@ -685,7 +829,7 @@ IMPORTANT FORMATTING INSTRUCTIONS:
 - Start directly with <wiki_structure> and end with </wiki_structure>
 
 IMPORTANT:
-1. Create ${isComprehensiveView ? '8-12' : '4-6'} pages that would make a ${isComprehensiveView ? 'comprehensive' : 'concise'} wiki for this repository
+1. Create ${String(wikiType).trim().toLowerCase() === 'comprehensive' ? '8-12' : String(wikiType).trim().toLowerCase() === 'business' ? '6-10' : '4-6'} pages that would make a ${String(wikiType).trim().toLowerCase()} wiki for this repository
 2. Each page should focus on a specific aspect of the codebase (e.g., architecture, key features, setup)
 3. The relevant_files should be actual files from the repository that would be used to generate that page
 4. Return ONLY valid XML with the structure specified above, with no markdown code block delimiters`
@@ -872,8 +1016,9 @@ IMPORTANT:
       const sections: WikiSection[] = [];
       const rootSections: string[] = [];
 
-      // Try to parse sections if we're in comprehensive view
-      if (isComprehensiveView) {
+      // Try to parse sections if we're in comprehensive or business view
+      const wikiTypeNorm = String(wikiType).trim().toLowerCase();
+      if (wikiTypeNorm === 'comprehensive' || wikiTypeNorm === 'business') {
         const sectionsEls = xmlDoc.querySelectorAll('section');
 
         if (sectionsEls && sectionsEls.length > 0) {
@@ -1010,7 +1155,7 @@ IMPORTANT:
     } finally {
       setStructureRequestInProgress(false);
     }
-  }, [generatePageContent, token, repoInfo, pagesInProgress.size, structureRequestInProgress, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, language, messages.loading, isComprehensiveView]);
+  }, [generatePageContent, token, repoInfo, pagesInProgress.size, structureRequestInProgress, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, language, messages.loading, wikiType]);
 
   // Fetch repository structure using GitHub or GitLab API
   const fetchRepositoryStructure = useCallback(async () => {
@@ -1377,7 +1522,7 @@ IMPORTANT:
         model: selectedModelState,
         is_custom_model: isCustomSelectedModelState.toString(),
         custom_model: customSelectedModelState,
-        comprehensive: isComprehensiveView.toString(),
+        wiki_type: wikiType,
       });
 
       // Add file filters configuration
@@ -1411,7 +1556,7 @@ IMPORTANT:
     console.log('Refreshing wiki. Server cache will be overwritten upon new generation if not cleared.');
 
     // Clear the localStorage cache (if any remnants or if it was used before this change)
-    const localStorageCacheKey = getCacheKey(repoInfo.owner, repoInfo.repo, repoInfo.type, language, isComprehensiveView);
+    const localStorageCacheKey = getCacheKey(repoInfo.owner, repoInfo.repo, repoInfo.type, language, wikiType);
     localStorage.removeItem(localStorageCacheKey);
 
     // Reset cache loaded flag
@@ -1441,7 +1586,7 @@ IMPORTANT:
     // For now, we rely on the standard loadData flow initiated by resetting effectRan and dependencies.
     // This will re-trigger the main data loading useEffect.
     // No direct call to fetchRepositoryStructure here, let the useEffect handle it based on effectRan.current = false.
-  }, [repoInfo.owner, repoInfo.repo, repoInfo.type, language, messages.loading, activeContentRequests, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, isComprehensiveView]);
+  }, [repoInfo.owner, repoInfo.repo, repoInfo.type, language, messages.loading, activeContentRequests, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, wikiType]);
 
   // Start wiki generation when component mounts
   useEffect(() => {
@@ -1457,7 +1602,7 @@ IMPORTANT:
             repo: repoInfo.repo,
             repo_type: repoInfo.type,
             language: language,
-            comprehensive: isComprehensiveView.toString(),
+            wikiType: wikiType,
           });
           const response = await fetch(`/api/wiki_cache?${params.toString()}`);
 
@@ -1614,7 +1759,7 @@ IMPORTANT:
 
     // Clean up function for this effect is not strictly necessary for loadData,
     // but keeping the main unmount cleanup in the other useEffect
-  }, [repoInfo.owner, repoInfo.repo, repoInfo.type, language, fetchRepositoryStructure, messages.loading?.fetchingCache, isComprehensiveView]);
+  }, [repoInfo.owner, repoInfo.repo, repoInfo.type, language, fetchRepositoryStructure, messages.loading?.fetchingCache, wikiType]);
 
   // Save wiki to server-side cache when generation is complete
   useEffect(() => {
@@ -1645,7 +1790,7 @@ IMPORTANT:
               repo: repoInfo.repo,
               repo_type: repoInfo.type,
               language: language,
-              comprehensive: isComprehensiveView,
+              wikiType: wikiType,
               wiki_structure: structureToCache,
               generated_pages: generatedPages
             };
@@ -1670,7 +1815,7 @@ IMPORTANT:
     };
 
     saveCache();
-  }, [isLoading, error, wikiStructure, generatedPages, repoInfo.owner, repoInfo.repo, repoInfo.type, language, isComprehensiveView]);
+  }, [isLoading, error, wikiStructure, generatedPages, repoInfo.owner, repoInfo.repo, repoInfo.type, language, wikiType]);
 
   const handlePageSelect = (pageId: string) => {
     if (currentPageId != pageId) {
@@ -1815,12 +1960,14 @@ IMPORTANT:
               {/* Wiki Type Indicator */}
               <div className="mb-3 flex items-center text-xs text-[var(--muted)]">
                 <span className="mr-2">Wiki Type:</span>
-                <span className={`px-2 py-0.5 rounded-full ${isComprehensiveView
+                <span className={`px-2 py-0.5 rounded-full ${String(wikiType).trim().toLowerCase() === 'comprehensive'
                   ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30'
                   : 'bg-[var(--background)] text-[var(--foreground)] border border-[var(--border-color)]'}`}>
-                  {isComprehensiveView
+                  {String(wikiType).trim().toLowerCase() === 'comprehensive'
                     ? (messages.form?.comprehensive || 'Comprehensive')
-                    : (messages.form?.concise || 'Concise')}
+                    : String(wikiType).trim().toLowerCase() === 'business'
+                      ? (messages.form?.business || 'Business')
+                      : (messages.form?.concise || 'Concise')}
                 </span>
               </div>
 
@@ -1976,6 +2123,7 @@ IMPORTANT:
               isCustomModel={isCustomSelectedModelState}
               customModel={customSelectedModelState}
               language={language}
+              wikiType={wikiType}
               onRef={(ref) => (askComponentRef.current = ref)}
             />
           </div>
@@ -1993,8 +2141,8 @@ IMPORTANT:
         setIsCustomModel={setIsCustomSelectedModelState}
         customModel={customSelectedModelState}
         setCustomModel={setCustomSelectedModelState}
-        isComprehensiveView={isComprehensiveView}
-        setIsComprehensiveView={setIsComprehensiveView}
+        wikiType={wikiType}
+        setWikiType={setWikiType}
         showFileFilters={true}
         excludedDirs={modelExcludedDirs}
         setExcludedDirs={setModelExcludedDirs}
