@@ -380,7 +380,8 @@ IMPORTANT: Generate the content in ${language === 'en' ? 'English' :
             language === 'zh' ? 'Mandarin Chinese (中文)' :
             language === 'es' ? 'Spanish (Español)' :
             language === 'kr' ? 'Korean (한국어)' :
-            language === 'vi' ? 'Vietnamese (Tiếng Việt)' : 'English'} language.
+            language === 'vi' ? 'Vietnamese (Tiếng Việt)' :
+            language === 'pt-BR' ? 'Portuguese (Português)' : 'English'} language.
 
 Remember:
 - Ground every claim in the provided source files.

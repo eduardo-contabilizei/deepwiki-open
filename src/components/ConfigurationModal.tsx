@@ -138,6 +138,7 @@ export default function ConfigurationModal({
                 <option value="es">Spanish (Español)</option>
                 <option value="kr">Korean (한국어)</option>
                 <option value="vi">Vietnamese (Tiếng Việt)</option>
+                <option value="pt-BR">Portuguese - Brazil (Português do Brasil)</option>
               </select>
             </div>
 

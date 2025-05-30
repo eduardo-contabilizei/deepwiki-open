@@ -33,6 +33,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       if (!browserLang) {
         return 'en'; // Default to English if browser language is not available
       }
+      
+      // Special case for Portuguese Brazil (pt-BR)
+      if (browserLang.toLowerCase() === 'pt-br') {
+        console.log('Brazilian Portuguese detected');
+        return 'pt-BR';
+      }
 
       // Extract the language code (first 2 characters)
       const langCode = browserLang.split('-')[0].toLowerCase();
@@ -42,6 +48,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       if (locales.includes(langCode as any)) {
         console.log('Language supported, using:', langCode);
         return langCode;
+      }
+      
+      // Special case for Portuguese variants - map to pt-BR
+      if (langCode === 'pt') {
+        console.log('Portuguese language detected, using pt-BR');
+        return 'pt-BR';
       }
 
       // Special case for Chinese variants
