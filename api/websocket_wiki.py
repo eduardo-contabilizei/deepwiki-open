@@ -55,6 +55,7 @@ class ChatCompletionRequest(BaseModel):
     excluded_files: Optional[str] = Field(None, description="Comma-separated list of file patterns to exclude from processing")
     included_dirs: Optional[str] = Field(None, description="Comma-separated list of directories to include exclusively")
     included_files: Optional[str] = Field(None, description="Comma-separated list of file patterns to include exclusively")
+    wiki_type: Optional[str] = Field("comprehensive", description="Wiki type (comprehensive, concise, business)")
 
 async def handle_websocket_chat(websocket: WebSocket):
     """
@@ -81,7 +82,7 @@ async def handle_websocket_chat(websocket: WebSocket):
 
         # Create a new RAG instance for this request
         try:
-            request_rag = RAG(provider=request.provider, model=request.model)
+            request_rag = RAG(provider=request.provider, model=request.model, wiki_type=request.wiki_type)
 
             # Extract custom file filter parameters if provided
             excluded_dirs = None

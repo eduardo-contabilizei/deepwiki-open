@@ -137,7 +137,7 @@ class Memory(adal.core.component.DataComponent):
                 logger.error(f"Failed to recover from error: {str(e2)}")
                 return False
 
-system_prompt = r"""
+SYSTEM_PROMPT_COMPREHENSIVE = r"""
 You are a code assistant which answers user questions on a Github Repo.
 You will receive user query, relevant context, and past conversation history.
 
@@ -161,6 +161,59 @@ IMPORTANT FORMATTING RULES:
 3. The content will already be rendered as markdown, so just provide the raw markdown content
 
 Think step by step and ensure your answer is well-structured and visually organized.
+"""
+
+SYSTEM_PROMPT_BUSINESS = r"""
+You are a strategic AI assistant tasked with generating a business-focused wiki for a software project.
+Your audience includes project managers, business analysts, and stakeholders.
+Focus on:
+- High-level architecture and key components.
+- Core business value and use cases.
+- How the project or specific modules address business needs.
+- Key features and their benefits from a business perspective.
+- Integration points with other systems, if relevant.
+- Target user personas and how the project serves them.
+
+LANGUAGE DETECTION AND RESPONSE:
+- Detect the language of the user's query.
+- Respond in the SAME language as the user's query.
+- IMPORTANT: If a specific language is requested, prioritize that language.
+
+FORMAT YOUR RESPONSE USING MARKDOWN:
+- Use clear, concise language. Avoid overly technical jargon unless necessary and explained.
+- Use ## headings for major sections.
+- Use bullet points for lists of features, benefits, or use cases.
+- Use **bold** for emphasis on key business terms or value propositions.
+
+IMPORTANT FORMATTING RULES:
+1. DO NOT include ```markdown fences at the beginning or end of your answer.
+2. Start your response directly with the content.
+3. The content will be rendered as markdown.
+"""
+
+SYSTEM_PROMPT_CONCISE = r"""
+You are an AI assistant creating a concise, high-level overview wiki for a software project.
+Your goal is to provide a quick understanding of the project's purpose and key functionalities.
+Focus on:
+- The main purpose of the project/repository.
+- A brief summary of its core functionalities.
+- What problem it solves.
+- Key technologies used (briefly).
+
+LANGUAGE DETECTION AND RESPONSE:
+- Detect the language of the user's query.
+- Respond in the SAME language as the user's query.
+- IMPORTANT: If a specific language is requested, prioritize that language.
+
+FORMAT YOUR RESPONSE USING MARKDOWN:
+- Be brief and to the point.
+- Use ## headings for major sections.
+- Use bullet points for key functionalities or technologies.
+
+IMPORTANT FORMATTING RULES:
+1. DO NOT include ```markdown fences at the beginning or end of your answer.
+2. Start your response directly with the content.
+3. The content will be rendered as markdown.
 """
 
 # Template for RAG
@@ -205,7 +258,7 @@ class RAG(adal.Component):
     """RAG with one repo.
     If you want to load a new repos, call prepare_retriever(repo_url_or_path) first."""
 
-    def __init__(self, provider="google", model=None, use_s3: bool = False):  # noqa: F841 - use_s3 is kept for compatibility
+    def __init__(self, provider="google", model=None, use_s3: bool = False, wiki_type: str = "comprehensive"):  # noqa: F841 - use_s3 is kept for compatibility
         """
         Initialize the RAG component.
 
@@ -213,11 +266,13 @@ class RAG(adal.Component):
             provider: Model provider to use (google, openai, openrouter, ollama)
             model: Model name to use with the provider
             use_s3: Whether to use S3 for database storage (default: False)
+            wiki_type: Type of wiki to use (default: comprehensive)
         """
         super().__init__()
 
         self.provider = provider
-        self.model = model
+        self.model_name = model
+        self.wiki_type = wiki_type
 
         # Import the helper functions
         from api.config import get_embedder_config, is_ollama_embedder
@@ -270,9 +325,17 @@ IMPORTANT FORMATTING RULES:
 8. When listing tags or similar items, write them as plain text without escape characters
 9. For pipe characters (|) in text, write them directly without escaping them"""
 
+        # Select the system prompt based on wiki_type
+        if self.wiki_type == "business":
+            current_system_prompt = SYSTEM_PROMPT_BUSINESS
+        elif self.wiki_type == "concise":
+            current_system_prompt = SYSTEM_PROMPT_CONCISE
+        else:  # Default to comprehensive
+            current_system_prompt = SYSTEM_PROMPT_COMPREHENSIVE
+
         # Get model configuration based on provider and model
         from api.config import get_model_config
-        generator_config = get_model_config(self.provider, self.model)
+        generator_config = get_model_config(self.provider, self.model_name)
 
         # Set up the main generator
         self.generator = adal.Generator(
@@ -280,7 +343,7 @@ IMPORTANT FORMATTING RULES:
             prompt_kwargs={
                 "output_format_str": format_instructions,
                 "conversation_history": self.memory(),
-                "system_prompt": system_prompt,
+                "system_prompt": current_system_prompt,  # Use the selected system prompt
                 "contexts": None,
             },
             model_client=generator_config["model_client"](),

@@ -60,7 +60,8 @@ class ProcessedProjectEntry(BaseModel):
     name: str  # owner/repo
     repo_type: str # Renamed from type to repo_type for clarity with existing models
     submittedAt: int # Timestamp
-    language: str # Extracted from filename
+    language: str # Extracted from file content
+    wikiType: str = "comprehensive" # Wiki type (comprehensive, concise, business)
 
 class WikiStructureModel(BaseModel):
     """
@@ -70,6 +71,8 @@ class WikiStructureModel(BaseModel):
     title: str
     description: str
     pages: List[WikiPage]
+    language: str = "en"
+    wikiType: str = "comprehensive"
 
 class WikiCacheData(BaseModel):
     """
@@ -367,17 +370,40 @@ os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
 
 def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str, wiki_type: str = "comprehensive") -> str:
     """Generates the file path for a given wiki cache."""
-    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}_{wiki_type}.json"
+    # Remove language and wiki_type from filename to avoid issues with special characters
+    # These properties will still be stored inside the file
+    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}.json"
     return os.path.join(WIKI_CACHE_DIR, filename)
 
 async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str, wiki_type: str = "comprehensive") -> Optional[WikiCacheData]:
     """Reads wiki cache data from the file system."""
     cache_path = get_wiki_cache_path(owner, repo, repo_type, language, wiki_type)
+    logger.info(f"Attempting to read wiki cache from {cache_path}")
+    logger.info(f"Requested parameters: language={language}, wiki_type={wiki_type}")
+    
     if os.path.exists(cache_path):
         try:
             with open(cache_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return WikiCacheData(**data)
+                cache_data = WikiCacheData(**data)
+                
+                # Log the cached data properties for debugging
+                structure_language = getattr(cache_data.wiki_structure, 'language', None)
+                structure_wiki_type = getattr(cache_data.wiki_structure, 'wikiType', None)
+                logger.info(f"Cache contains: language={structure_language}, wiki_type={structure_wiki_type}")
+                
+                # Check if the cached data matches the requested language
+                if hasattr(cache_data.wiki_structure, 'language') and cache_data.wiki_structure.language != language:
+                    logger.info(f"Cache language mismatch: requested {language}, found {cache_data.wiki_structure.language}")
+                    return None
+                
+                # Check if the cached data matches the requested wiki_type
+                if hasattr(cache_data.wiki_structure, 'wikiType') and cache_data.wiki_structure.wikiType != wiki_type:
+                    logger.info(f"Cache wiki_type mismatch: requested {wiki_type}, found {cache_data.wiki_structure.wikiType}")
+                    return None
+                    
+                logger.info(f"Successfully loaded cache with matching language and wiki_type")
+                return cache_data
         except Exception as e:
             logger.error(f"Error reading wiki cache from {cache_path}: {e}")
             return None
@@ -388,6 +414,18 @@ async def save_wiki_cache(data: WikiCacheRequest) -> bool:
     cache_path = get_wiki_cache_path(data.owner, data.repo, data.repo_type, data.language, data.wiki_type)
     logger.info(f"Attempting to save wiki cache. Path: {cache_path}")
     try:
+        # Make sure language and wiki_type are stored in the wiki_structure
+        # Primeiro, vamos garantir que wiki_structure tenha os atributos necessários
+        if not hasattr(data.wiki_structure, '__dict__'):
+            # Se wiki_structure não tiver __dict__, precisamos convertê-lo para um objeto que tenha
+            data.wiki_structure = WikiStructureModel(**data.wiki_structure.dict())
+            
+        # Agora podemos adicionar os atributos
+        data.wiki_structure.language = data.language
+        data.wiki_structure.wikiType = data.wiki_type
+        
+        logger.info(f"Saving wiki cache with type: {data.wiki_type}")
+            
         payload = WikiCacheData(
             wiki_structure=data.wiki_structure,
             generated_pages=data.generated_pages
@@ -464,9 +502,30 @@ async def delete_wiki_cache(
 
     if os.path.exists(cache_path):
         try:
+            # First check if this is the correct file by reading its contents
+            # and verifying language and wiki_type
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                cache_data = WikiCacheData(**data)
+                
+                # Check if the cached data matches the requested language and wiki_type
+                if (hasattr(cache_data.wiki_structure, 'language') and 
+                    cache_data.wiki_structure.language != language) or \
+                   (hasattr(cache_data.wiki_structure, 'wikiType') and 
+                    cache_data.wiki_structure.wikiType != wikiType):
+                    logger.warning(f"Cache language/type mismatch. Cannot delete: {cache_path}")
+                    raise HTTPException(status_code=404, detail="Wiki cache with specified language and type not found")
+            
+            # If we get here, it's the correct file to delete
             os.remove(cache_path)
             logger.info(f"Successfully deleted wiki cache: {cache_path}")
             return {"message": f"Wiki cache for {owner}/{repo} ({language}) deleted successfully"}
+        except FileNotFoundError:
+            logger.warning(f"Wiki cache not found, cannot delete: {cache_path}")
+            raise HTTPException(status_code=404, detail="Wiki cache not found")
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing wiki cache {cache_path}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to parse wiki cache: {str(e)}")
         except Exception as e:
             logger.error(f"Error deleting wiki cache {cache_path}: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to delete wiki cache: {str(e)}")
@@ -513,7 +572,8 @@ async def root():
 async def get_processed_projects():
     """
     Lists all processed projects found in the wiki cache directory.
-    Projects are identified by files named like: deepwiki_cache_{repo_type}_{owner}_{repo}_{language}.json
+    Projects are identified by files named like: deepwiki_cache_{repo_type}_{owner}_{repo}.json
+    with language and wiki_type stored inside the file
     """
     project_entries: List[ProcessedProjectEntry] = []
     # WIKI_CACHE_DIR is already defined globally in the file
@@ -533,14 +593,33 @@ async def get_processed_projects():
                     stats = await asyncio.to_thread(os.stat, file_path) # Use asyncio.to_thread for os.stat
                     parts = filename.replace("deepwiki_cache_", "").replace(".json", "").split('_')
 
-                    # Expecting repo_type_owner_repo_language
-                    # Example: deepwiki_cache_github_AsyncFuncAI_deepwiki-open_en.json
-                    # parts = [github, AsyncFuncAI, deepwiki-open, en]
-                    if len(parts) >= 4:
+                    # New format: deepwiki_cache_{repo_type}_{owner}_{repo}.json
+                    # Example: deepwiki_cache_github_AsyncFuncAI_deepwiki-open.json
+                    # parts = [github, AsyncFuncAI, deepwiki-open]
+                    if len(parts) >= 3:
                         repo_type = parts[0]
                         owner = parts[1]
-                        language = parts[-1] # language is the last part
-                        repo = "_".join(parts[2:-1]) # repo can contain underscores
+                        repo = "_".join(parts[2:]) # repo can contain underscores
+                        
+                        # Read the file to get the language and wiki_type
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                                cache_data = WikiCacheData(**data)
+                                language = "en"  # Default if not found
+                                wiki_type = "comprehensive"  # Default if not found
+                                
+                                # Get language from wiki_structure if available
+                                if hasattr(cache_data.wiki_structure, 'language'):
+                                    language = cache_data.wiki_structure.language
+                                    
+                                # Get wiki_type from wiki_structure if available
+                                if hasattr(cache_data.wiki_structure, 'wikiType'):
+                                    wiki_type = cache_data.wiki_structure.wikiType
+                        except Exception as e:
+                            logger.warning(f"Could not read metadata from {file_path}: {e}")
+                            language = "en"  # Default if there's an error
+                            wiki_type = "comprehensive"  # Default if there's an error
 
                         project_entries.append(
                             ProcessedProjectEntry(
@@ -550,7 +629,8 @@ async def get_processed_projects():
                                 name=f"{owner}/{repo}",
                                 repo_type=repo_type,
                                 submittedAt=int(stats.st_mtime * 1000), # Convert to milliseconds
-                                language=language
+                                language=language,
+                                wikiType=wiki_type
                             )
                         )
                     else:

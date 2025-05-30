@@ -318,6 +318,7 @@ export default function RepoWikiPage() {
  let promptContent = '';
         // Garantir que wikiType seja uma string válida
         const wikiTypeValue = String(wikiType).trim().toLowerCase();
+        console.log(`Using wiki type: ${wikiTypeValue}`);
         
         if (wikiTypeValue === 'business') {
           promptContent = 
